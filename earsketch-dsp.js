@@ -5250,7 +5250,7 @@ Module.asmGlobalArg = { "Math": Math, "Int8Array": Int8Array, "Int16Array": Int1
 Module.asmLibraryArg = { "abort": abort, "assert": assert, "_floor": _floor, "_sin": _sin, "_fflush": _fflush, "_llvm_pow_f64": _llvm_pow_f64, "_atan": _atan, "_emscripten_set_main_loop": _emscripten_set_main_loop, "_abort": _abort, "_emscripten_set_main_loop_timing": _emscripten_set_main_loop_timing, "_fabsf": _fabsf, "_sbrk": _sbrk, "_cos": _cos, "_atan2": _atan2, "___setErrNo": ___setErrNo, "_emscripten_memcpy_big": _emscripten_memcpy_big, "_sqrt": _sqrt, "_time": _time, "_sysconf": _sysconf, "___errno_location": ___errno_location, "STACKTOP": STACKTOP, "STACK_MAX": STACK_MAX, "tempDoublePtr": tempDoublePtr, "ABORT": ABORT };
 // EMSCRIPTEN_START_ASM
 var asm = (function(global, env, buffer) {
-  'almost asm';
+  'use asm';
   
   var HEAP8 = new global.Int8Array(buffer);
   var HEAP16 = new global.Int16Array(buffer);

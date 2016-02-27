@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+</head>
 <!--
 
 The MIT License (MIT)
@@ -24,8 +29,7 @@ THE SOFTWARE.
 
 -->
 
-<!DOCTYPE html>
-<html>
+
 <body>
  <script src="earsketch-dsp.js"></script> 
 <script type="text/javascript">
@@ -61,7 +65,7 @@ function loadClick() {
 	console.log('Testing Ptcht Shift Time');
 
 
-	context = new AudioContext();
+	context = new (window.AudioContext || window.webkitAudioContext)();
 	var req = new XMLHttpRequest();     
 	//req.open("GET","esaudioshort.wav");     
 	req.open("GET","esaudioshort.wav");    
@@ -72,7 +76,7 @@ function loadClick() {
 	    context.decodeAudioData(req.response, function(buf ){             
 	    	buffer=buf;  
 	    	AudioData =  buffer.getChannelData(0);          
-			console.log('LOADED...');        
+			console.log('LOADED... ' + AudioData.length);        
 	     });     
 	};     
 	req.send(); 
@@ -80,7 +84,8 @@ function loadClick() {
 
 
 
-function playClick() {     
+function playClick() {   
+	console.log('playClick... ' + AudioData.length);   
 	//create a source node from the buffer    
 	var src = context.createBufferSource();      
 	src.buffer = buffer;     
@@ -90,15 +95,19 @@ function playClick() {
 	src.start();
 }
 
-function playPitchShiftClick() {  
-	console.log('Play PITCHSHIFT BUFFER !!!');   
 
-	var psArrayBuffer = context.createBuffer(1, INTERSAMPLES, context.sampleRate);  
-	psArrayBuffer.copyToChannel(YINTERP_HEAP,0,0);    
+function playPitchShiftClick() {  
+	console.log('Play PITCHSHIFT BUFFER !!!' );   
+
+	var audiobuffer = context.createBuffer(1, INTERSAMPLES, context.sampleRate);  
+	var pcmChannel = audiobuffer.getChannelData(0);
+	var ytemp = 	YINTERP_HEAP.subarray(0,INTERSAMPLES);
+	pcmChannel.set(ytemp);
+	//psArrayBuffer.copyToChannel(YINTERP_HEAP,0,0);    
 
 	//play immediately     
 	var src = context.createBufferSource();      
-	src.buffer = psArrayBuffer;     
+	src.buffer = audiobuffer;     
 	//connect to the final output node (the speakers)     
 	src.connect(context.destination);     
 	//play immediately     
@@ -278,6 +287,8 @@ function stftClick() {
 	console.log('WINDOW_SIZE '+ WINDOW_SIZE + ' HOP SIZE '+HOP_SIZE);
 	console.log('Buffer Samples '+ AudioData.length );
 
+	var  preMS = Date.now();
+
 	NumberOfSamples = AudioData.length ;
 	FRAMES = 1+ Math.floor(  (NumberOfSamples-WINDOW_SIZE) / HOP_SIZE );
 
@@ -325,8 +336,8 @@ function stftClick() {
 	console.log('Interpolation ...');
 
 	interpolateFitVar(YOVERLAP_HEAP.byteOffset,YINTERP_HEAP.byteOffset, YHOPOUT_HEAP.byteOffset,  OUTSAMPLES,INTERSAMPLES,  FRAMES ,HOP_SIZE);
-    console.log('output = '+index);
-    console.log('after DSP Done 3 !!!');
+	var postMS = Date.now();
+    console.log('after DSP Done !!! in ' + (postMS-preMS) + ' ms');
     //freeHeap();
 }
 </script>
