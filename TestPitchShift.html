@@ -91,10 +91,10 @@ function playClick() {
 function playPitchShiftClick() {  
 	console.log('Play PITCHSHIFT BUFFER !!!' );  
 
-	var audiobuffer = context.createBuffer(1, INTERSAMPLES, context.sampleRate);  
+	var audiobuffer = context.createBuffer(1, OUTSAMPLES, context.sampleRate);  
 	var pcmChannel = audiobuffer.getChannelData(0);
 	
-	var ytemp = 	YINTERP_HEAP.subarray(0,INTERSAMPLES);
+	var ytemp = 	YOVERLAP_HEAP.subarray(0,OUTSAMPLES);
 	pcmChannel.set(ytemp);
 
 	//psArrayBuffer.copyToChannel(YINTERP_HEAP,0,0);    
@@ -111,7 +111,8 @@ function playPitchShiftClick() {
 function setupCWrappers(){
 
 	smbPitchShift = Module.cwrap('smbPitchShift', null, ['number', 'number','number','number','number','number','number']);
-
+	create = Module.cwrap('create', 'number', null);
+	release = Module.cwrap('release', null, ['number']);
 }
 
 function setupHeap(){
@@ -136,12 +137,14 @@ function initDSPLibrary(){
 	console.log('initDSPLibrary... ');
 	setupCWrappers();
 	setupHeap();
+	dataPtr = create();
 
 }
 
 function freeHeap(){
 	Module._free(WW_HEAP.byteOffset);
 	Module._free(YOVERLAP_HEAP.byteOffset);
+	release(dataPtr);
 }
 
 function setOutSample(){
@@ -163,7 +166,7 @@ function stftClick() {
 	console.log('Buffer Samples '+ AudioData.length );
 
 	var  preMS = Date.now();
-
+	var index = 0;
 	NumberOfSamples = AudioData.length ;
 	FRAMES = 1+ Math.floor(  (NumberOfSamples-WINDOW_SIZE) / HOP_SIZE );
 
@@ -182,14 +185,13 @@ function stftClick() {
 
 		var wsize = OUTSAMPLES;//WINDOW_SIZE;// * stretch_ratio
 		var stretch_sampleRate = buffer.sampleRate;// * stretch_ratio;
-		var pitchShift = 0.5;
-		smbPitchShift(pitchShift, wsize, 1024, 4, stretch_sampleRate, YOVERLAP_HEAP.byteOffset, YINTERP_HEAP.byteOffset);
+		var pitchShift = 2;
+		smbPitchShift(dataPtr, pitchShift, wsize, 1024, 4, stretch_sampleRate, YOVERLAP_HEAP.byteOffset, YOVERLAP_HEAP.byteOffset);
 
     }
 
 	var postMS = Date.now();
     console.log('after DSP Done !!! in ' + (postMS-preMS) + ' ms');
-
 }
 
 </script>
