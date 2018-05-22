@@ -76,10 +76,6 @@ struct Data* create() {
 	return g;
 }
 
-void release(struct Data *g) {
-	free(g);
-} 
-
 void smbPitchShift(struct Data* g, float pitchShift, long numSampsToProcess, long fftFrameSize, long osamp, float sampleRate, float *indata, float *outdata)
 /*
 	Routine smbPitchShift(). See top of file for explanation

@@ -94,7 +94,7 @@ function playPitchShiftClick() {
 	var audiobuffer = context.createBuffer(1, OUTSAMPLES, context.sampleRate);  
 	var pcmChannel = audiobuffer.getChannelData(0);
 	
-	var ytemp = 	YOVERLAP_HEAP.subarray(0,OUTSAMPLES);
+	var ytemp = YOVERLAP_HEAP.subarray(0,OUTSAMPLES);
 	pcmChannel.set(ytemp);
 
 	//psArrayBuffer.copyToChannel(YINTERP_HEAP,0,0);    
@@ -144,7 +144,7 @@ function initDSPLibrary(){
 function freeHeap(){
 	Module._free(WW_HEAP.byteOffset);
 	Module._free(YOVERLAP_HEAP.byteOffset);
-	release(dataPtr);
+	Module._free(dataPtr);
 }
 
 function setOutSample(){
