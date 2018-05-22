@@ -1,5 +1,8 @@
 /****************************************************************************
 *
+* This is a modified version of smbPitchShift intended for use with emscripten 
+* to run in the browser.
+* 
 * NAME: smbPitchShift.cpp
 * VERSION: 1.2
 * HOME URL: http://www.dspdimension.com
