@@ -54,6 +54,8 @@ var INTERSAMPLES=0;
 var WW_HEAP;
 var YOVERLAP_HEAP;
 
+	pitchShift = 0.5;
+
 function loadClick() {
 	console.log('Testing Ptcht Shift Time');
 
@@ -112,7 +114,6 @@ function setupCWrappers(){
 
 	smbPitchShift = Module.cwrap('smbPitchShift', null, ['number', 'number','number','number','number','number','number']);
 	create = Module.cwrap('create', 'number', null);
-	release = Module.cwrap('release', null, ['number']);
 }
 
 function setupHeap(){
@@ -129,7 +130,14 @@ function setupHeap(){
 	nDataBytes = (OUTSAMPLES) * Float32Array.BYTES_PER_ELEMENT;
 	var yoverlapPtr = Module._malloc(nDataBytes);
 	YOVERLAP_HEAP = new Float32Array(Module.HEAPF32.buffer, yoverlapPtr, OUTSAMPLES);
+
+	nDataBytes = (OUTSAMPLES) * Float32Array.BYTES_PER_ELEMENT;
+	var youtbufPtr = Module._malloc(nDataBytes);
+	YOUTBUF_HEAP = new Float32Array(Module.HEAPF32.buffer, youtbufPtr, OUTSAMPLES);
+
+	console.log(OUTSAMPLES);
 }
+
 
 
 
@@ -181,14 +189,34 @@ function stftClick() {
     console.log('INTERSAMPLES ' +  INTERSAMPLES);
 
 	YOVERLAP_HEAP.set(AudioData.subarray(index,index+OUTSAMPLES));
-    for (f=0; f<NumberOfSamples; ++f) {		
+	var wsize = OUTSAMPLES;//WINDOW_SIZE;// * stretch_ratio
+	var stretch_sampleRate = buffer.sampleRate;// * stretch_ratio;
 
-		var wsize = OUTSAMPLES;//WINDOW_SIZE;// * stretch_ratio
-		var stretch_sampleRate = buffer.sampleRate;// * stretch_ratio;
-		var pitchShift = 2;
-		smbPitchShift(dataPtr, pitchShift, wsize, 1024, 4, stretch_sampleRate, YOVERLAP_HEAP.byteOffset, YOVERLAP_HEAP.byteOffset);
+	var scriptNode = context.createScriptProcessor(1024, 1, 1);
+	var hop = 0;
+	// Give the node a function to process audio events
+	scriptNode.onaudioprocess = function(audioProcessingEvent) {
+		// The input buffer is the song we loaded earlier
+		//var inputBuffer = audioProcessingEvent.inputBuffer;
 
-    }
+		// The output buffer contains the samples that will be modified and played
+		var outputBuffer = audioProcessingEvent.outputBuffer;
+		//var inputData = inputBuffer.getChannelData(0);
+		for(i=0;i<1024;i++) {
+			smbPitchShift(dataPtr, pitchShift, wsize, 1024, 4, stretch_sampleRate, YOVERLAP_HEAP.byteOffset, YOUTBUF_HEAP.byteOffset);
+		}
+
+		var ytemp = YOUTBUF_HEAP.subarray(hop,hop+1024);
+		var pcmChannel = outputBuffer.getChannelData(0);
+		hop += 1024;
+		if (hop>OUTSAMPLES/2) hop = 0;
+		pcmChannel.set(ytemp);
+	}
+
+
+	 scriptNode.connect(context.destination);
+
+
 
 	var postMS = Date.now();
     console.log('after DSP Done !!! in ' + (postMS-preMS) + ' ms');
@@ -200,5 +228,19 @@ function stftClick() {
 <button type="button" onclick="playClick();">Play Buffer!</button>
 <button type="button" onclick="stftClick();">PITCHSHIFT!</button>
 <button type="button" onclick="playPitchShiftClick();">PLAY PITCHSHIFT!</button> 
+<div class="slidecontainer">
+	<input type="range" min="0.5" max="2" value="1" step="0.01" class="slider" id="myRange">
+	<p>Value: <span id="demo"></span></p>
+  </div>
+
+  <script>
+  var slider = document.getElementById("myRange");
+var output = document.getElementById("demo");
+
+slider.oninput = function() {
+  pitchShift = this.value;
+  output.innerHTML = this.value;
+}
+</script>
 </body>
 </html>

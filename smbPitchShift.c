@@ -233,6 +233,13 @@ void smbPitchShift(struct Data* g, float pitchShift, long numSampsToProcess, lon
 		}
 	//}
 	g->pos += 1;
+	if(g->pos > numSampsToProcess/2) {
+
+			g->Init = false;
+	g->Rover = false;
+			g->pos = 0;
+	}
+
 }
 
 // -----------------------------------------------------------------------------------------------------------------
