@@ -75,6 +75,19 @@ struct Data *create()
 	g->Init = false;
 	g->Rover = false;
 	g->pos = 0;
+
+	/* initialize our arrays */
+	memset(g->InFIFO, 0, MAX_FRAME_LENGTH * sizeof(float));
+	memset(g->OutFIFO, 0, MAX_FRAME_LENGTH * sizeof(float));
+	memset(g->FFTworksp, 0, 2 * MAX_FRAME_LENGTH * sizeof(float));
+	memset(g->LastPhase, 0, (MAX_FRAME_LENGTH / 2 + 1) * sizeof(float));
+	memset(g->SumPhase, 0, (MAX_FRAME_LENGTH / 2 + 1) * sizeof(float));
+	memset(g->OutputAccum, 0, 2 * MAX_FRAME_LENGTH * sizeof(float));
+	memset(g->AnaFreq, 0, MAX_FRAME_LENGTH * sizeof(float));
+	memset(g->AnaMagn, 0, MAX_FRAME_LENGTH * sizeof(float));
+	g->Init = true;
+	g->pos = 0;
+
 	return g;
 }
 
@@ -99,21 +112,6 @@ void smbPitchShift(struct Data *g, float pitchShift, long numSampsToProcess, lon
 	inFifoLatency = fftFrameSize - stepSize;
 	if (g->Rover == false)
 		g->Rover = inFifoLatency;
-
-	/* initialize our arrays */
-	if (g->Init == false)
-	{
-		memset(g->InFIFO, 0, MAX_FRAME_LENGTH * sizeof(float));
-		memset(g->OutFIFO, 0, MAX_FRAME_LENGTH * sizeof(float));
-		memset(g->FFTworksp, 0, 2 * MAX_FRAME_LENGTH * sizeof(float));
-		memset(g->LastPhase, 0, (MAX_FRAME_LENGTH / 2 + 1) * sizeof(float));
-		memset(g->SumPhase, 0, (MAX_FRAME_LENGTH / 2 + 1) * sizeof(float));
-		memset(g->OutputAccum, 0, 2 * MAX_FRAME_LENGTH * sizeof(float));
-		memset(g->AnaFreq, 0, MAX_FRAME_LENGTH * sizeof(float));
-		memset(g->AnaMagn, 0, MAX_FRAME_LENGTH * sizeof(float));
-		g->Init = true;
-		g->pos = 0;
-	}
 
 	/* main processing loop */
 	//for (i = 0; i < numSampsToProcess; i++){
@@ -249,8 +247,6 @@ void smbPitchShift(struct Data *g, float pitchShift, long numSampsToProcess, lon
 	g->pos += 1;
 	if (g->pos > numSampsToProcess)
 	{
-		g->Init = false;
-		g->Rover = false;
 		g->pos = 0;
 	}
 }
