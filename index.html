@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<meta charset="utf-8"/>
+	<meta charset="utf-8" />
 </head>
 <!--
 
@@ -31,176 +32,145 @@ THE SOFTWARE.
 
 
 <body>
- <!--script src="earsketch-dsp.js"></script--> 
- <script src="phasevocoder.js"></script> 
-<script type="text/javascript">
+	<!--script src="earsketch-dsp.js"></script-->
+	<script src="phasevocoder.js"></script>
+	<script type="text/javascript">
+		var context;
+		var buffer;
+		var AudioData;
+		var NumberOfSamples = 0;
+		var scriptNode;
+		var WINDOW_SIZE = 1024;
+		var hop = 0;
+		var INTERSAMPLES = 0;
 
-var context;
-var buffer;
-var AudioData;
-var NumberOfSamples=0;
+		//HEAP VARIABLES
+		var WW_HEAP;
+		var YOVERLAP_HEAP;
 
-var WINDOW_SIZE = 1024;
+		pitchShift = 1;
 
-var INTERSAMPLES=0;
+		function loadClick() {
+			console.log('Testing Ptcht Shift Time');
 
-//HEAP VARIABLES
-var WW_HEAP;
-var YOVERLAP_HEAP;
+			context = new(window.AudioContext || window.webkitAudioContext)();
+			var req = new XMLHttpRequest();
+			//req.open("GET","esaudioshort.wav");     
+			req.open("GET", "in.wav");
+			req.responseType = "arraybuffer";
 
-pitchShift = 0.5;
-
-function loadClick() {
-	console.log('Testing Ptcht Shift Time');
-
-	context = new (window.AudioContext || window.webkitAudioContext)();
-	var req = new XMLHttpRequest();     
-	//req.open("GET","esaudioshort.wav");     
-	req.open("GET","in.wav");    
-	req.responseType = "arraybuffer";     
-
-	req.onload = function() {    
-	    //decode the loaded data         
-	    context.decodeAudioData(req.response, function(buf ){             
-	    	buffer=buf;  
-	    	AudioData =  buffer.getChannelData(0);          
-			console.log('LOADED... ' + AudioData.length);        
-	     });     
-	};     
-	req.send(); 
-}
-
-
-
-function playClick() {   
-	console.log('playClick... ' + AudioData.length);   
-	//create a source node from the buffer    
-	var src = context.createBufferSource();      
-	src.buffer = buffer;     
-	//connect to the final output node (the speakers)     
-	src.connect(context.destination);     
-	//play immediately     
-	src.start();
-}
-
-
-function playPitchShiftClick() {  
-	console.log('Play PITCHSHIFT BUFFER !!!' );  
-
-	var audiobuffer = context.createBuffer(1, OUTSAMPLES, context.sampleRate);  
-	var pcmChannel = audiobuffer.getChannelData(0);
-	
-	var ytemp = YOVERLAP_HEAP.subarray(0,OUTSAMPLES);
-	pcmChannel.set(ytemp);
-
-	//psArrayBuffer.copyToChannel(YINTERP_HEAP,0,0);    
-
-	//play immediately     
-	var src = context.createBufferSource();      
-	src.buffer = audiobuffer;     
-	//connect to the final output node (the speakers)     
-	src.connect(context.destination);     
-	//play immediately     
-	src.start();
-}
-
-function setupCWrappers(){
-
-	smbPitchShift = Module.cwrap('smbPitchShift', null, ['number', 'number','number','number','number','number','number']);
-	create = Module.cwrap('create', 'number', null);
-}
-
-function setupHeap(){
-
-    //yoverlap = (float *)calloc(outSamples , sizeof(float));
-    //yinterp = (float *)calloc(interSamples,sizeof(float));
-
-    //TODO:REVIEW EMSCRIPTEN HEAP FOR OVERLAP AND INTERPOLATION  EXTENDS TOTAL MEMORY 
-    //IN THE HEAP OR USE STANDARD FLOAT ARRAY AND USE THE COPY FUNCTION
-	nDataBytes = (WINDOW_SIZE) * Float32Array.BYTES_PER_ELEMENT;
-	var wwPtr = Module._malloc(nDataBytes);
-	WW_HEAP = new Float32Array(Module.HEAPF32.buffer, wwPtr, WINDOW_SIZE);
-
-	nDataBytes = (INTERSAMPLES) * Float32Array.BYTES_PER_ELEMENT;
-	var yoverlapPtr = Module._malloc(nDataBytes);
-	YOVERLAP_HEAP = new Float32Array(Module.HEAPF32.buffer, yoverlapPtr, INTERSAMPLES);
-
-	nDataBytes = (INTERSAMPLES) * Float32Array.BYTES_PER_ELEMENT;
-	var youtbufPtr = Module._malloc(nDataBytes);
-	YOUTBUF_HEAP = new Float32Array(Module.HEAPF32.buffer, youtbufPtr, INTERSAMPLES);
-
-}
-
-function initDSPLibrary(){
-	console.log('initDSPLibrary... ');
-	setupCWrappers();
-	setupHeap();
-	dataPtr = create();
-
-}
-
-function freeHeap(){
-	Module._free(WW_HEAP.byteOffset);
-	Module._free(YOVERLAP_HEAP.byteOffset);
-	Module._free(dataPtr);
-}
-
-function stftClick() { 
-	console.log('Buffer Samples '+ AudioData.length );
-
-	var index = 0;
-	NumberOfSamples = AudioData.length;
-	INTERSAMPLES = NumberOfSamples;//Math.floor(OUTSAMPLES/alpha);
-	initDSPLibrary();
-
-    console.log('INTERSAMPLES ' +  INTERSAMPLES);
-
-	YOVERLAP_HEAP.set(AudioData.subarray(index,index+NumberOfSamples));
-	// Stretching not implemented yet, but could be done by resampling
-	// YOVERLAP_HEAP by stretch_ratio amount and then pitch shift the result
-	var stretch_size = NumberOfSamples;// * stretch_ratio
-	var stretch_sampleRate = buffer.sampleRate;// * stretch_ratio;
-
-	var scriptNode = context.createScriptProcessor(WINDOW_SIZE, 1, 1);
-	var hop = 0;
-	// Give the node a function to process audio events
-	scriptNode.onaudioprocess = function(audioProcessingEvent) {
-		// The input buffer is the song we loaded earlier
-		//var inputBuffer = audioProcessingEvent.inputBuffer;
-
-		// The output buffer contains the samples that will be modified and played
-		var outputBuffer = audioProcessingEvent.outputBuffer;
-		//var inputData = inputBuffer.getChannelData(0);
-		for(i=0;i<1024;i++) {
-			smbPitchShift(dataPtr, pitchShift, stretch_size, WINDOW_SIZE, 4, stretch_sampleRate, YOVERLAP_HEAP.byteOffset, YOUTBUF_HEAP.byteOffset);
+			req.onload = function () {
+				//decode the loaded data         
+				context.decodeAudioData(req.response, function (buf) {
+					buffer = buf;
+					AudioData = buffer.getChannelData(0);
+					console.log('LOADED... ' + AudioData.length);
+					NumberOfSamples = AudioData.length;
+					INTERSAMPLES = NumberOfSamples; //Math.floor(OUTSAMPLES/alpha);
+					initDSPLibrary();
+				});
+			};
+			req.send();
 		}
 
-		var ytemp = YOUTBUF_HEAP.subarray(hop,hop+WINDOW_SIZE);
-		var pcmChannel = outputBuffer.getChannelData(0);
-		hop += WINDOW_SIZE;
-		if (hop>INTERSAMPLES) hop = 0;
-		pcmChannel.set(ytemp);
-	}
-	 scriptNode.connect(context.destination);
-}
+		function stopClick() {
+			scriptNode.disconnect();
+		}
 
-</script>
+		function setupCWrappers() {
 
-<button type="button" onclick="loadClick();">Load Buffer!</button>
-<button type="button" onclick="stftClick();">PITCHSHIFT!</button>
-<div class="slidecontainer">
-	<input type="range" min="0.25" max="4" value="1" step="0.001" class="slider" id="myRange">
-	<p>Value: <span id="demo">1.0</span></p>
-  </div>
+			smbPitchShift = Module.cwrap('smbPitchShift', null, ['number', 'number', 'number', 'number', 'number', 'number',
+				'number'
+			]);
+			create = Module.cwrap('create', 'number', null);
+		}
 
-  <script>
-  var slider = document.getElementById("myRange");
-var output = document.getElementById("demo");
+		function setupHeap() {
 
-slider.oninput = function() {
-  pitchShift = this.value;
-  output.innerHTML = this.value;
-}
-</script>
+			//yoverlap = (float *)calloc(outSamples , sizeof(float));
+			//yinterp = (float *)calloc(interSamples,sizeof(float));
+
+			//TODO:REVIEW EMSCRIPTEN HEAP FOR OVERLAP AND INTERPOLATION  EXTENDS TOTAL MEMORY 
+			//IN THE HEAP OR USE STANDARD FLOAT ARRAY AND USE THE COPY FUNCTION
+			nDataBytes = (WINDOW_SIZE) * Float32Array.BYTES_PER_ELEMENT;
+			var wwPtr = Module._malloc(nDataBytes);
+			WW_HEAP = new Float32Array(Module.HEAPF32.buffer, wwPtr, WINDOW_SIZE);
+
+			nDataBytes = (INTERSAMPLES) * Float32Array.BYTES_PER_ELEMENT;
+			var yoverlapPtr = Module._malloc(nDataBytes);
+			YOVERLAP_HEAP = new Float32Array(Module.HEAPF32.buffer, yoverlapPtr, INTERSAMPLES);
+
+			nDataBytes = (INTERSAMPLES) * Float32Array.BYTES_PER_ELEMENT;
+			var youtbufPtr = Module._malloc(nDataBytes);
+			YOUTBUF_HEAP = new Float32Array(Module.HEAPF32.buffer, youtbufPtr, INTERSAMPLES);
+
+		}
+
+		function initDSPLibrary() {
+			console.log('initDSPLibrary... ');
+			setupCWrappers();
+			setupHeap();
+			dataPtr = create();
+
+		}
+
+		function freeHeap() {
+			Module._free(WW_HEAP.byteOffset);
+			Module._free(YOVERLAP_HEAP.byteOffset);
+			Module._free(YOUTBUF_HEAP.byteOffset);
+			Module._free(dataPtr);
+		}
+
+		function stftClick() {
+			console.log('Buffer Samples ' + AudioData.length);
+
+			console.log('INTERSAMPLES ' + INTERSAMPLES);
+
+			YOVERLAP_HEAP.set(AudioData.subarray(0, NumberOfSamples));
+			// Stretching not implemented yet, but could be done by resampling
+			// YOVERLAP_HEAP by stretch_ratio amount and then pitch shift the result
+			var stretch_size = NumberOfSamples; // * stretch_ratio
+			var stretch_sampleRate = buffer.sampleRate; // * stretch_ratio;
+
+			scriptNode = context.createScriptProcessor(WINDOW_SIZE, 1, 1);
+			
+
+			scriptNode.onaudioprocess = function (audioProcessingEvent) {
+				var outputBuffer = audioProcessingEvent.outputBuffer;
+
+				for (i = 0; i < 1024; i++) {
+					smbPitchShift(dataPtr, pitchShift, stretch_size, WINDOW_SIZE, 4, stretch_sampleRate, YOVERLAP_HEAP.byteOffset,
+						YOUTBUF_HEAP.byteOffset);
+				}
+
+				var ytemp = YOUTBUF_HEAP.subarray(hop, hop + WINDOW_SIZE);
+				var pcmChannel = outputBuffer.getChannelData(0);
+				hop += WINDOW_SIZE;
+				if (hop > INTERSAMPLES) hop = 0;
+				pcmChannel.set(ytemp);
+			}
+			scriptNode.connect(context.destination);
+		}
+	</script>
+	<button type="button" onclick="loadClick();">Load audio</button>
+	<button type="button" onclick="stftClick();">Play</button>
+	<button type="button" onclick="stopClick();">Stop</button>
+	<div class="slidecontainer">
+		<input type="range" min="0.25" max="4" value="1" step="0.001" class="slider" id="myRange">
+		<p>Value:
+			<span id="demo">1.0</span>
+		</p>
+	</div>
+
+	<script>
+		var slider = document.getElementById("myRange");
+		var output = document.getElementById("demo");
+
+		slider.oninput = function () {
+			pitchShift = this.value;
+			output.innerHTML = this.value;
+		}
+	</script>
 </body>
+
 </html>
