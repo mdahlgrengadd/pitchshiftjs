@@ -3,6 +3,7 @@
 
 <head>
 	<meta charset="utf-8" />
+	<script src="./libsamplerate.js"></script>
 </head>
 <!--
 
@@ -36,45 +37,81 @@ THE SOFTWARE.
 	<script src="phasevocoder.js"></script>
 	<script type="text/javascript">
 		var context;
-		var buffer;
-		var AudioData;
+		StretchSrc = BufferSrc = {};
 		var NumberOfSamples = 0;
-		var scriptNode;
-		var WINDOW_SIZE = 1024;
+		scriptNode = {};
+		var WINDOW_SIZE = 8192;
+		var OSAMP = 16;
 		var hop = 0;
 		var INTERSAMPLES = 0;
-
+		DEFAULT_STRETCH = pitchShift = 4.0;
+		
 		//HEAP VARIABLES
 		var WW_HEAP;
 		var YOVERLAP_HEAP;
+		var YOUTBUF_HEAP;
 
-		pitchShift = 1;
+
+
+		function stretchAudio(buf, stretch_factor){
+			
+			var frameCount = Math.ceil(context.sampleRate * buf.duration * stretch_factor);
+			var myArrayBuffer = context.createBuffer(1, frameCount, context.sampleRate);
+
+			var resampler = new Samplerate({
+				type: Samplerate.FASTEST
+			});
+
+			var result = resampler.process({
+				data: buf.getChannelData(0), // buffer is a Float32Aray or a Int16Array
+				ratio: stretch_factor,
+				last: false
+			});
+
+			var converted = result.data; // same type as buffer above
+			var used = result.used; // input samples effectively used
+
+			myArrayBuffer.copyToChannel(converted, 0, 0);
+
+			var AudioData = myArrayBuffer.getChannelData(0);
+
+			NumberOfSamples = AudioData.length;
+			INTERSAMPLES = NumberOfSamples; //Math.floor(OUTSAMPLES/alpha);
+			return myArrayBuffer;
+		}
 
 		function loadClick() {
-			console.log('Testing Ptcht Shift Time');
+			pitchShift = DEFAULT_STRETCH;
 
 			context = new(window.AudioContext || window.webkitAudioContext)();
 			var req = new XMLHttpRequest();
-			//req.open("GET","esaudioshort.wav");     
-			req.open("GET", "in.wav");
+ 
+			// Sample from Freesound by Rutger Muller
+			// https://freesound.org/people/RutgerMuller/sounds/51257/
+			// and bebeto
+			// https://freesound.org/people/bebeto/sounds/24039/
+			req.open("GET", "24039__bebeto__loop022.wav");
+			//req.open("GET", "in.wav");
 			req.responseType = "arraybuffer";
 
 			req.onload = function () {
 				//decode the loaded data         
 				context.decodeAudioData(req.response, function (buf) {
-					buffer = buf;
-					AudioData = buffer.getChannelData(0);
+					BufferSrc = buf;
+					StretchSrc = stretchAudio(BufferSrc, DEFAULT_STRETCH);
+					var AudioData = BufferSrc.getChannelData(0);
 					console.log('LOADED... ' + AudioData.length);
 					NumberOfSamples = AudioData.length;
 					INTERSAMPLES = NumberOfSamples; //Math.floor(OUTSAMPLES/alpha);
 					initDSPLibrary();
+					stftClick();
 				});
 			};
 			req.send();
 		}
 
 		function stopClick() {
-			scriptNode.disconnect();
+			freeHeap();
 		}
 
 		function setupCWrappers() {
@@ -83,6 +120,7 @@ THE SOFTWARE.
 				'number'
 			]);
 			create = Module.cwrap('create', 'number', null);
+			reset = Module.cwrap('reset', null, ['number']);
 		}
 
 		function setupHeap() {
@@ -96,13 +134,13 @@ THE SOFTWARE.
 			var wwPtr = Module._malloc(nDataBytes);
 			WW_HEAP = new Float32Array(Module.HEAPF32.buffer, wwPtr, WINDOW_SIZE);
 
-			nDataBytes = (INTERSAMPLES) * Float32Array.BYTES_PER_ELEMENT;
+			/*nDataBytes = (INTERSAMPLES) * Float32Array.BYTES_PER_ELEMENT;
 			var yoverlapPtr = Module._malloc(nDataBytes);
-			YOVERLAP_HEAP = new Float32Array(Module.HEAPF32.buffer, yoverlapPtr, INTERSAMPLES);
+			YOVERLAP_HEAP = new Float32Array(Module.HEAPF32.buffer, yoverlapPtr, INTERSAMPLES);*/
 
-			nDataBytes = (INTERSAMPLES) * Float32Array.BYTES_PER_ELEMENT;
+			nDataBytes = (WINDOW_SIZE) * Float32Array.BYTES_PER_ELEMENT;
 			var youtbufPtr = Module._malloc(nDataBytes);
-			YOUTBUF_HEAP = new Float32Array(Module.HEAPF32.buffer, youtbufPtr, INTERSAMPLES);
+			YOUTBUF_HEAP = new Float32Array(Module.HEAPF32.buffer, youtbufPtr, WINDOW_SIZE);
 
 		}
 
@@ -115,50 +153,79 @@ THE SOFTWARE.
 		}
 
 		function freeHeap() {
+			source.disconnect();
+			scriptNode.disconnect();
+			scriptNode.onaudioprocess = null;
+
 			Module._free(WW_HEAP.byteOffset);
-			Module._free(YOVERLAP_HEAP.byteOffset);
 			Module._free(YOUTBUF_HEAP.byteOffset);
 			Module._free(dataPtr);
 		}
 
 		function stftClick() {
-			console.log('Buffer Samples ' + AudioData.length);
-
-			console.log('INTERSAMPLES ' + INTERSAMPLES);
-
-			YOVERLAP_HEAP.set(AudioData.subarray(0, NumberOfSamples));
-			// Stretching not implemented yet, but could be done by resampling
-			// YOVERLAP_HEAP by stretch_ratio amount and then pitch shift the result
-			var stretch_size = NumberOfSamples; // * stretch_ratio
-			var stretch_sampleRate = buffer.sampleRate; // * stretch_ratio;
 
 			scriptNode = context.createScriptProcessor(WINDOW_SIZE, 1, 1);
-			
 
 			scriptNode.onaudioprocess = function (audioProcessingEvent) {
+
 				var outputBuffer = audioProcessingEvent.outputBuffer;
 
-				for (i = 0; i < 1024; i++) {
-					smbPitchShift(dataPtr, pitchShift, stretch_size, WINDOW_SIZE, 4, stretch_sampleRate, YOVERLAP_HEAP.byteOffset,
-						YOUTBUF_HEAP.byteOffset);
-				}
+				var inputBuffer = audioProcessingEvent.inputBuffer.getChannelData(0);
 
-				var ytemp = YOUTBUF_HEAP.subarray(hop, hop + WINDOW_SIZE);
+				WW_HEAP.set(inputBuffer.subarray(0, WINDOW_SIZE*2));
+
+				smbPitchShift(dataPtr, pitchShift, WINDOW_SIZE, WINDOW_SIZE, OSAMP, context.sampleRate, WW_HEAP.byteOffset,
+					YOUTBUF_HEAP.byteOffset);
+
+				var ytemp = YOUTBUF_HEAP.subarray(0, WINDOW_SIZE);
 				var pcmChannel = outputBuffer.getChannelData(0);
-				hop += WINDOW_SIZE;
-				if (hop > INTERSAMPLES) hop = 0;
+
 				pcmChannel.set(ytemp);
+
 			}
+
+
+			source = context.createBufferSource();
+			source.buffer = StretchSrc;
+
+			source.connect(scriptNode);
 			scriptNode.connect(context.destination);
+
+			source.loop = true;
+
+			source.detune = 0;
+			source.loopStart = 0;
+			source.loopEnd = StretchSrc.duration;
+			source.start();
+
 		}
+
+		function newStretch(value) {
+			scriptNode.disconnect();
+			source.disconnect();
+
+			Module._free(dataPtr);
+			dataPtr = create();
+
+			StretchSrc = stretchAudio(BufferSrc, value);
+			pitchShift = value;
+			stftClick();
+		}
+
 	</script>
-	<button type="button" onclick="loadClick();">Load audio</button>
-	<button type="button" onclick="stftClick();">Play</button>
+	<button type="button" onclick="loadClick();">Play</button>
 	<button type="button" onclick="stopClick();">Stop</button>
 	<div class="slidecontainer">
-		<input type="range" min="0.25" max="4" value="1" step="0.001" class="slider" id="myRange">
-		<p>Value:
+		<input type="range" min="0.25" max="4" value="1" step="0.1" class="slider" id="myRange">
+		<p>Pitch factor:
 			<span id="demo">1.0</span>
+		</p>
+	</div>
+
+	<div class="slidecontainer2">
+		<input type="range" min="0.25" max="4" value="1" step="0.1" class="slider" id="myRange2">
+		<p>Stretch factor:
+			<span id="demo2">1.0</span>
 		</p>
 	</div>
 
@@ -169,6 +236,15 @@ THE SOFTWARE.
 		slider.oninput = function () {
 			pitchShift = this.value;
 			output.innerHTML = this.value;
+		}
+
+		var slider2 = document.getElementById("myRange2");
+		var output2 = document.getElementById("demo2");
+
+		slider2.onchange = function () {
+			stretch = this.value;
+			output2.innerHTML = this.value;
+			newStretch(this.value);
 		}
 	</script>
 </body>

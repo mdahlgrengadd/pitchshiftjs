@@ -69,13 +69,7 @@ typedef struct Data
 	long pos;
 } Data;
 
-struct Data *create()
-{
-	struct Data *g = malloc(sizeof(Data));
-	g->Init = false;
-	g->Rover = false;
-	g->pos = 0;
-
+void reset(struct Data *g) {
 	/* initialize our arrays */
 	memset(g->InFIFO, 0, MAX_FRAME_LENGTH * sizeof(float));
 	memset(g->OutFIFO, 0, MAX_FRAME_LENGTH * sizeof(float));
@@ -85,12 +79,20 @@ struct Data *create()
 	memset(g->OutputAccum, 0, 2 * MAX_FRAME_LENGTH * sizeof(float));
 	memset(g->AnaFreq, 0, MAX_FRAME_LENGTH * sizeof(float));
 	memset(g->AnaMagn, 0, MAX_FRAME_LENGTH * sizeof(float));
-	g->Init = true;
+}
+
+struct Data *create()
+{
+	struct Data *g = malloc(sizeof(Data));
+	g->Rover = false;
 	g->pos = 0;
 
+	reset(g);
 	return g;
 }
 
+
+float old_pitchshift = 1;
 void smbPitchShift(struct Data *g, float pitchShift, long numSampsToProcess, long fftFrameSize, long osamp, float sampleRate, float *indata, float *outdata)
 /*
 	Routine smbPitchShift(). See top of file for explanation
@@ -99,11 +101,10 @@ void smbPitchShift(struct Data *g, float pitchShift, long numSampsToProcess, lon
 	Author: (c)1999-2009 Stephan M. Bernsee <smb [AT] dspdimension [DOT] com>
 */
 {
-
 	double magn, phase, tmp, window, real, imag;
 	double freqPerBin, expct;
 	long k, qpd, index, inFifoLatency, stepSize, fftFrameSize2;
-
+	
 	/* set up some handy variables */
 	fftFrameSize2 = fftFrameSize / 2;
 	stepSize = fftFrameSize / osamp;
@@ -114,7 +115,7 @@ void smbPitchShift(struct Data *g, float pitchShift, long numSampsToProcess, lon
 		g->Rover = inFifoLatency;
 
 	/* main processing loop */
-	//for (i = 0; i < numSampsToProcess; i++){
+	for (g->pos = 0; g->pos < numSampsToProcess; g->pos++){
 
 	/* As long as we have not yet collected enough data just read in */
 	g->InFIFO[g->Rover] = indata[g->pos];
@@ -243,12 +244,9 @@ void smbPitchShift(struct Data *g, float pitchShift, long numSampsToProcess, lon
 		for (k = 0; k < inFifoLatency; k++)
 			g->InFIFO[k] = g->InFIFO[k + stepSize];
 	}
-	//}
-	g->pos += 1;
-	if (g->pos > numSampsToProcess)
-	{
-		g->pos = 0;
 	}
+
+
 }
 
 // -----------------------------------------------------------------------------------------------------------------
